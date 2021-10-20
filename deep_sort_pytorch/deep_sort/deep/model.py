@@ -73,7 +73,7 @@ class Net(nn.Module):
         # 128 16 8
         self.layer4 = make_layers(256, 512, 2, True)
         # 256 8 4
-        self.avgpool = nn.AvgPool2d((8, 4), 1)
+        self.avgpool = nn.AvgPool2d((4, 4), 1)
         # 256 1 1
         self.reid = reid
         self.classifier = nn.Sequential(
@@ -103,7 +103,7 @@ class Net(nn.Module):
 
 if __name__ == '__main__':
     net = Net()
-    x = torch.randn(4, 3, 128, 64)
+    x = torch.randn(4, 3, 64, 64)
     y = net(x)
     import ipdb
     ipdb.set_trace()
