@@ -61,7 +61,7 @@ net = Net(num_classes=num_classes)
 print("Finetuning from {args.finetune}")
 checkpoint = torch.load(args.finetune)
 net_dict = checkpoint['net_dict']
-net.load_state_dict(net_dict)
+net.load_state_dict(net_dict, strict=False)
 
 if args.resume:
     assert os.path.isfile(
