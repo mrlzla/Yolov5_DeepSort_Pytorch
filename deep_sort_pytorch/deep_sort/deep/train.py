@@ -73,13 +73,6 @@ if args.resume:
     net.load_state_dict(net_dict)
     best_acc = checkpoint['acc']
     start_epoch = checkpoint['epoch']
-elif args.finetune:
-    assert os.path.isfile(
-        "./checkpoint/ckpt.t7"), "Error: no checkpoint file found!"
-    print('Finetuning from checkpoint/ckpt.t7')
-    checkpoint = torch.load("./checkpoint/ckpt.t7")
-    net_dict = checkpoint['net_dict']
-    net.load_state_dict(net_dict)
 net.to(device)
 
 # loss and optimizer
