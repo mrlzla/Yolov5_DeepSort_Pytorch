@@ -17,6 +17,7 @@ parser.add_argument("--gpu-id", default=0, type=int)
 parser.add_argument("--lr", default=0.1, type=float)
 parser.add_argument("--interval", '-i', default=20, type=int)
 parser.add_argument('--resume', '-r', action='store_true')
+parser.add_argument("--finetune", default='./checkpoint/ckpt.t7', type=str)
 args = parser.parse_args()
 
 # device
@@ -53,6 +54,11 @@ testloader = torch.utils.data.DataLoader(
 num_classes = max(len(trainloader.dataset.classes),
                   len(testloader.dataset.classes))
 
+print("Finetuning from {args.finetune}")
+checkpoint = torch.load(args.finetune)
+net_dict = checkpoint['net_dict']
+net.load_state_dict(net_dict)
+
 # net definition
 start_epoch = 0
 net = Net(num_classes=num_classes)
@@ -66,6 +72,13 @@ if args.resume:
     net.load_state_dict(net_dict)
     best_acc = checkpoint['acc']
     start_epoch = checkpoint['epoch']
+elif args.finetune:
+    assert os.path.isfile(
+        "./checkpoint/ckpt.t7"), "Error: no checkpoint file found!"
+    print('Finetuning from checkpoint/ckpt.t7')
+    checkpoint = torch.load("./checkpoint/ckpt.t7")
+    net_dict = checkpoint['net_dict']
+    net.load_state_dict(net_dict)
 net.to(device)
 
 # loss and optimizer
