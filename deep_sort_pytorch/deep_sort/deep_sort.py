@@ -11,9 +11,10 @@ __all__ = ['DeepSort']
 
 
 class DeepSort(object):
-    def __init__(self, model_path, max_dist=0.2, min_confidence=0.3, nms_max_overlap=1.0, max_iou_distance=0.7, max_age=70, n_init=3, nn_budget=100, use_cuda=True):
+    def __init__(self, model_path, max_dist=0.2, min_confidence=0.3, nms_max_overlap=1.0, max_iou_distance=0.7, max_age=70, n_init=3, nn_budget=100, expand_bbox=0.4, use_cuda=True):
         self.min_confidence = min_confidence
         self.nms_max_overlap = nms_max_overlap
+        self.expand_bbox = expand_bbox
 
         self.extractor = Extractor(model_path, use_cuda=use_cuda)
 
@@ -26,7 +27,7 @@ class DeepSort(object):
     def update(self, bbox_xywh, confidences, classes, ori_img):
         self.height, self.width = ori_img.shape[:2]
         # generate detections
-        features = self._get_features(bbox_xywh, ori_img)
+        features = self._get_features(bbox_xywh, ori_img, self.expand_bbox)
         bbox_tlwh = self._xywh_to_tlwh(bbox_xywh)
         detections = [Detection(bbox_tlwh[i], conf, features[i]) for i, conf in enumerate(
             confidences) if conf > self.min_confidence]
@@ -68,12 +69,13 @@ class DeepSort(object):
         bbox_tlwh[:, 1] = bbox_xywh[:, 1] - bbox_xywh[:, 3] / 2.
         return bbox_tlwh
 
-    def _xywh_to_xyxy(self, bbox_xywh):
+    def _xywh_to_xyxy(self, bbox_xywh, expand=0.0):
         x, y, w, h = bbox_xywh
-        x1 = max(int(x - w / 2), 0)
-        x2 = min(int(x + w / 2), self.width - 1)
-        y1 = max(int(y - h / 2), 0)
-        y2 = min(int(y + h / 2), self.height - 1)
+        dx, dy = int(expand * w), int(expand * h)
+        x1 = max(int(x - w / 2 - dx), 0)
+        x2 = min(int(x + w / 2 + dx), self.width - 1)
+        y1 = max(int(y - h / 2 - dy), 0)
+        y2 = min(int(y + h / 2 + dy), self.height - 1)
         return x1, y1, x2, y2
 
     def _tlwh_to_xyxy(self, bbox_tlwh):
@@ -101,10 +103,10 @@ class DeepSort(object):
         h = int(y2 - y1)
         return t, l, w, h
 
-    def _get_features(self, bbox_xywh, ori_img):
+    def _get_features(self, bbox_xywh, ori_img, expand=0.0):
         im_crops = []
         for box in bbox_xywh:
-            x1, y1, x2, y2 = self._xywh_to_xyxy(box)
+            x1, y1, x2, y2 = self._xywh_to_xyxy(box, expand=expand)
             im = ori_img[y1:y2, x1:x2]
             im_crops.append(im)
         if im_crops:
