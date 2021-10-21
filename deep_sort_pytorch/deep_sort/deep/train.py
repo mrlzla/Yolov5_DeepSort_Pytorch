@@ -54,14 +54,15 @@ testloader = torch.utils.data.DataLoader(
 num_classes = max(len(trainloader.dataset.classes),
                   len(testloader.dataset.classes))
 
+# net definition
+start_epoch = 0
+net = Net(num_classes=num_classes)
+
 print("Finetuning from {args.finetune}")
 checkpoint = torch.load(args.finetune)
 net_dict = checkpoint['net_dict']
 net.load_state_dict(net_dict)
 
-# net definition
-start_epoch = 0
-net = Net(num_classes=num_classes)
 if args.resume:
     assert os.path.isfile(
         "./checkpoint/ckpt.t7"), "Error: no checkpoint file found!"
