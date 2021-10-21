@@ -1,12 +1,12 @@
 import sys
 sys.path.insert(0, './yolov5')
 
+from yolov5.utils.google_utils import attempt_download
 from yolov5.models.experimental import attempt_load
-from yolov5.utils.downloads import attempt_download
 from yolov5.utils.datasets import LoadImages, LoadStreams
 from yolov5.utils.general import check_img_size, non_max_suppression, scale_coords, check_imshow, xyxy2xywh
-from yolov5.utils.torch_utils import select_device, time_sync
-from yolov5.utils.plots import Annotator, colors
+from yolov5.utils.torch_utils import select_device, time_synchronized
+from yolov5.utils.plots import plot_one_box
 from deep_sort_pytorch.utils.parser import get_config
 from deep_sort_pytorch.deep_sort import DeepSort
 import argparse
@@ -18,6 +18,16 @@ from pathlib import Path
 import cv2
 import torch
 import torch.backends.cudnn as cudnn
+
+
+def compute_color_for_id(label):
+    """
+    Simple function that adds fixed color depending on the id
+    """
+    palette = (2 ** 11 - 1, 2 ** 15 - 1, 2 ** 20 - 1)
+
+    color = [int((p * (label ** 2 - label + 1)) % 255) for p in palette]
+    return tuple(color)
 
 
 def detect(opt):
@@ -33,7 +43,7 @@ def detect(opt):
     attempt_download(deep_sort_weights, repo='mikel-brostrom/Yolov5_DeepSort_Pytorch')
     deepsort = DeepSort(cfg.DEEPSORT.REID_CKPT,
                         max_dist=cfg.DEEPSORT.MAX_DIST, min_confidence=cfg.DEEPSORT.MIN_CONFIDENCE,
-                        max_iou_distance=cfg.DEEPSORT.MAX_IOU_DISTANCE,
+                        nms_max_overlap=cfg.DEEPSORT.NMS_MAX_OVERLAP, max_iou_distance=cfg.DEEPSORT.MAX_IOU_DISTANCE,
                         max_age=cfg.DEEPSORT.MAX_AGE, n_init=cfg.DEEPSORT.N_INIT, nn_budget=cfg.DEEPSORT.NN_BUDGET,
                         use_cuda=True)
 
@@ -47,8 +57,8 @@ def detect(opt):
             pass
             shutil.rmtree(out)  # delete output folder
         os.makedirs(out)  # make new output folder
-
     half = device.type != 'cpu'  # half precision only supported on CUDA
+
     # Load model
     model = attempt_load(yolo_weights, map_location=device)  # load FP32 model
     stride = int(model.stride.max())  # model stride
@@ -67,7 +77,7 @@ def detect(opt):
         cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadStreams(source, img_size=imgsz, stride=stride)
     else:
-        dataset = LoadImages(source, img_size=imgsz, stride=stride)
+        dataset = LoadImages(source, img_size=imgsz)
 
     # Get names and colors
     names = model.module.names if hasattr(model, 'module') else model.names
@@ -90,13 +100,13 @@ def detect(opt):
             img = img.unsqueeze(0)
 
         # Inference
-        t1 = time_sync()
+        t1 = time_synchronized()
         pred = model(img, augment=opt.augment)[0]
 
         # Apply NMS
         pred = non_max_suppression(
             pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
-        t2 = time_sync()
+        t2 = time_synchronized()
 
         # Process detections
         for i, det in enumerate(pred):  # detections per image
@@ -108,8 +118,6 @@ def detect(opt):
             s += '%gx%g ' % img.shape[2:]  # print string
             save_path = str(Path(out) / Path(p).name)
 
-            annotator = Annotator(im0, line_width=2, pil=not ascii)
-
             if det is not None and len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(
@@ -118,14 +126,14 @@ def detect(opt):
                 # Print results
                 for c in det[:, -1].unique():
                     n = (det[:, -1] == c).sum()  # detections per class
-                    s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                    s += '%g %ss, ' % (n, names[int(c)])  # add to string
 
                 xywhs = xyxy2xywh(det[:, 0:4])
                 confs = det[:, 4]
                 clss = det[:, 5]
 
                 # pass detections to deepsort
-                outputs = deepsort.update(xywhs.cpu(), confs.cpu(), clss.cpu(), im0)
+                outputs = deepsort.update(xywhs.cpu(), confs.cpu(), clss, im0)
                 
                 # draw boxes for visualization
                 if len(outputs) > 0:
@@ -137,18 +145,19 @@ def detect(opt):
 
                         c = int(cls)  # integer class
                         label = f'{id} {names[c]} {conf:.2f}'
-                        annotator.box_label(bboxes, label, color=colors(c, True))
+                        color = compute_color_for_id(id)
+                        plot_one_box(bboxes, im0, label=label, color=color, line_thickness=2)
 
                         if save_txt:
                             # to MOT format
-                            bbox_left = output[0]
-                            bbox_top = output[1]
+                            bbox_top = output[0]
+                            bbox_left = output[1]
                             bbox_w = output[2] - output[0]
                             bbox_h = output[3] - output[1]
                             # Write MOT compliant results to file
                             with open(txt_path, 'a') as f:
-                               f.write(('%g ' * 10 + '\n') % (frame_idx, id, bbox_left,
-                                                           bbox_top, bbox_w, bbox_h, -1, -1, -1, -1))  # label format
+                               f.write(('%g ' * 10 + '\n') % (frame_idx, id, bbox_top,
+                                                           bbox_left, bbox_w, bbox_h, -1, -1, -1, -1))  # label format
 
             else:
                 deepsort.increment_ages()
@@ -157,7 +166,6 @@ def detect(opt):
             print('%sDone. (%.3fs)' % (s, t2 - t1))
 
             # Stream results
-            im0 = annotator.result()
             if show_vid:
                 cv2.imshow(p, im0)
                 if cv2.waitKey(1) == ord('q'):  # q to quit
@@ -190,7 +198,7 @@ def detect(opt):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--yolo_weights', nargs='+', type=str, default='yolov5/weights/yolov5s.pt', help='model.pt path(s)')
+    parser.add_argument('--yolo_weights', type=str, default='yolov5/weights/yolov5s.pt', help='model.pt path')
     parser.add_argument('--deep_sort_weights', type=str, default='deep_sort_pytorch/deep_sort/deep/checkpoint/ckpt.t7', help='ckpt.t7 path')
     # file/folder, 0 for webcam
     parser.add_argument('--source', type=str, default='0', help='source')
