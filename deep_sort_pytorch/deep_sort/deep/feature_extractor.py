@@ -17,7 +17,7 @@ class Extractor(object):
         logger = logging.getLogger("root.tracker")
         logger.info("Loading weights from {}... Done!".format(model_path))
         self.net.to(self.device)
-        self.size = (64, 128)
+        self.size = (64, 64)
         self.norm = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
@@ -33,7 +33,11 @@ class Extractor(object):
             4. normalize
         """
         def _resize(im, size):
-            return cv2.resize(im.astype(np.float32)/255., size)
+            if im.shape[0] > 64 or im.shape[1] > 64:
+                res = cv2.resize(im, size, interpolation=cv2.INTER_AREA)
+            else:
+                res = cv2.resize(im, size, interpolation=cv2.INTER_CUBIC)
+            return res.astype(np.float32)/255.
 
         im_batch = torch.cat([self.norm(_resize(im, self.size)).unsqueeze(
             0) for im in im_crops], dim=0).float()
