@@ -15,6 +15,8 @@ parser.add_argument("--data-dir", default='data', type=str)
 parser.add_argument("--no-cuda", action="store_true")
 parser.add_argument("--gpu-id", default=0, type=int)
 parser.add_argument("--lr", default=0.1, type=float)
+parser.add_argument('--size', nargs="+", type=int)
+parser.add_argument("--batch-size", default=64, type=int)
 parser.add_argument("--interval", '-i', default=20, type=int)
 parser.add_argument('--resume', '-r', action='store_true')
 parser.add_argument("--finetune", default='./checkpoint/ckpt.t7', type=str)
@@ -31,25 +33,25 @@ root = args.data_dir
 train_dir = os.path.join(root, "train")
 test_dir = os.path.join(root, "test")
 transform_train = torchvision.transforms.Compose([
-    torchvision.transforms.RandomCrop((64, 64), padding=4),
+    torchvision.transforms.RandomCrop(args.size, padding=4),
     torchvision.transforms.RandomHorizontalFlip(),
     torchvision.transforms.ToTensor(),
     torchvision.transforms.Normalize(
         [0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 transform_test = torchvision.transforms.Compose([
-    torchvision.transforms.Resize((64, 64)),
+    torchvision.transforms.Resize(args.size),
     torchvision.transforms.ToTensor(),
     torchvision.transforms.Normalize(
         [0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 trainloader = torch.utils.data.DataLoader(
     torchvision.datasets.ImageFolder(train_dir, transform=transform_train),
-    batch_size=64, shuffle=True
+    batch_size=args.batch_size, shuffle=True
 )
 testloader = torch.utils.data.DataLoader(
     torchvision.datasets.ImageFolder(test_dir, transform=transform_test),
-    batch_size=64, shuffle=True
+    batch_size=args.batch_size, shuffle=True
 )
 num_classes = max(len(trainloader.dataset.classes),
                   len(testloader.dataset.classes))
