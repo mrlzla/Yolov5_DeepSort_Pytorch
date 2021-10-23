@@ -8,7 +8,7 @@ from .model import Net
 
 
 class Extractor(object):
-    def __init__(self, model_path, use_cuda=True):
+    def __init__(self, model_path, size=(64, 128), use_cuda=True):
         self.net = Net(reid=True)
         self.device = "cuda" if torch.cuda.is_available() and use_cuda else "cpu"
         state_dict = torch.load(model_path, map_location=torch.device(self.device))[
@@ -17,7 +17,7 @@ class Extractor(object):
         logger = logging.getLogger("root.tracker")
         logger.info("Loading weights from {}... Done!".format(model_path))
         self.net.to(self.device)
-        self.size = (64, 64)
+        self.size = size
         self.norm = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
@@ -33,7 +33,7 @@ class Extractor(object):
             4. normalize
         """
         def _resize(im, size):
-            if im.shape[0] > 64 or im.shape[1] > 64:
+            if im.shape[0] > self.size[0] or im.shape[1] > self.size[1]:
                 res = cv2.resize(im, size, interpolation=cv2.INTER_AREA)
             else:
                 res = cv2.resize(im, size, interpolation=cv2.INTER_CUBIC)
